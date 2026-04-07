@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    body { background: #1a1a1a; color: #fff; font-family: monospace; padding: 20px; text-align: center; margin: 0; user-select: none; }
+    .machine { background: #2a2a2a; padding: 20px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 2px solid #333; max-width: 400px; margin: 0 auto; }
+    h2 { margin: 0; color: #00ffcc; text-transform: uppercase; font-size: 20px; letter-spacing: 2px;}
+    .display { background: #111; color: #ff0055; padding: 10px; border-radius: 5px; margin: 15px 0; font-size: 16px; border: 1px solid #ff0055; }
+    
+    .grid { display: grid; grid-template-columns: repeat(16, 1fr); gap: 2px; margin-bottom: 10px; }
+    .row-label { text-align: left; font-size: 10px; color: #888; margin-bottom: 2px; text-transform: uppercase; }
+    
+    .pad { aspect-ratio: 1; background: #444; border-radius: 2px; cursor: pointer; transition: 0.1s; border: 1px solid #222; }
+    .pad.active { background: #00ffcc; box-shadow: 0 0 8px #00ffcc; }
+    .pad.playing { filter: brightness(2); transform: scale(1.1); }
+    
+    .controls { margin-top: 25px; display: flex; justify-content: space-between; align-items: center; }
+    .btn { background: #00ffcc; color: #000; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; text-transform: uppercase; }
+    .btn.stop { background: #ff0055; color: #fff; }
+  </style>
+</head>
+<body>
+
+  <div class="machine">
+    <h2>AI Sequencer</h2>
+    <div class="display" id="screen">BPM: 120 | GENRE: INIT</div>
+    
+    <div class="row-label">Hi-Hat</div>
+    <div class="grid" id="grid-hihat"></div>
+    
+    <div class="row-label">Snare</div>
+    <div class="grid" id="grid-snare"></div>
+    
+    <div class="row-label">Kick</div>
+    <div class="grid" id="grid-kick"></div>
+    
+    <div class="controls">
+      <button class="btn" id="playBtn" onclick="togglePlay()">Play</button>
+      <input type="range" id="bpmSlider" min="60" max="180" value="120" oninput="updateBPM(this.value)">
+    </div>
+  </div>
+
+  <script>
+    // App State
+    let isPlaying = false;
+    let currentStep = 0;
+    let bpm = 120;
+    let timerID;
+    let audioCtx;
+    
+    // Default AI Pattern (Fallback)
+    let pattern = {
+      hihat: [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
+      snare: [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
+      kick:  [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0]
+    };
+
+    // 1. Initialize Audio Engine
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    // 2. Synthesize Sounds (Web Audio API Magic)
+    function playKick(time) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.frequency.setValueAtTime(150, time);
+      osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.5);
+      gain.gain.setValueAtTime(1, time);
+      gain.gain.exponentialRampToValueAtTime(0.01, time + 0.5);
+      osc.start(time); osc.stop(time + 0.5);
+    }
+
+    function playSnare(time) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.frequency.setValueAtTime(250, time);
+      gain.gain.setValueAtTime(1, time);
+      gain.gain.exponentialRampToValueAtTime(0.01, time + 0.2);
+      osc.start(time); osc.stop(time + 0.2);
+      // Add 'noise' for the snare rattle
+      playNoise(time, 0.2);
+    }
+
+    function playHiHat(time) {
+      playNoise(time, 0.05); // Short noise burst
+    }
+
+    function playNoise(time, duration) {
+      const bufferSize = audioCtx.sampleRate * duration;
+      const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+      
+      const noise = audioCtx.createBufferSource();
+      noise.buffer = buffer;
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'highpass'; filter.frequency.value = 7000;
+      const gain = audioCtx.createGain();
+      gain.gain.setValueAtTime(0.5, time);
+      gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
+      
+      noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+      noise.start(time);
+    }
+
+    // 3. Build UI Grid
+    function createGrid(inst) {
+      const grid = document.getElementById(`grid-${inst}`);
+      grid.innerHTML = '';
+      for (let i = 0; i < 16; i++) {
+        const pad = document.createElement('div');
+        pad.className = `pad ${pattern[inst][i] ? 'active' : ''}`;
+        pad.id = `pad-${inst}-${i}`;
+        pad.onclick = () => {
+          pattern[inst][i] = pattern[inst][i] ? 0 : 1;
+          pad.classList.toggle('active');
+        };
+        grid.appendChild(pad);
+      }
+    }
+
+    // 4. Sequencer Loop
+    function nextNote() {
+      const time = audioCtx.currentTime + 0.05;
+      if (pattern.kick[currentStep]) playKick(time);
+      if (pattern.snare[currentStep]) playSnare(time);
+      if (pattern.hihat[currentStep]) playHiHat(time);
+      
+      // UI Animation
+      document.querySelectorAll('.pad').forEach(p => p.classList.remove('playing'));
+      ['kick', 'snare', 'hihat'].forEach(inst => {
+        document.getElementById(`pad-${inst}-${currentStep}`).classList.add('playing');
+      });
+
+      currentStep = (currentStep + 1) % 16;
+    }
+
+    function scheduler() {
+      nextNote();
+      const secondsPerBeat = 60.0 / bpm;
+      timerID = setTimeout(scheduler, (secondsPerBeat / 4) * 1000); // 16th notes
+    }
+
+    function togglePlay() {
+      initAudio();
+      const btn = document.getElementById('playBtn');
+      if (isPlaying) {
+        clearTimeout(timerID);
+        btn.innerText = 'Play'; btn.classList.remove('stop');
+        document.querySelectorAll('.pad').forEach(p => p.classList.remove('playing'));
+      } else {
+        currentStep = 0;
+        scheduler();
+        btn.innerText = 'Stop'; btn.classList.add('stop');
+      }
+      isPlaying = !isPlaying;
+    }
+
+    function updateBPM(val) {
+      bpm = val;
+      document.getElementById('screen').innerText = `BPM: ${bpm} | GENRE: AI CUSTOM`;
+    }
+
+    // 5. Load AI Data
+    const params = new URLSearchParams(window.location.search);
+    try {
+      if (params.has('data')) {
+        const parsed = JSON.parse(decodeURIComponent(params.get('data')));
+        if (parsed.kick) pattern.kick = parsed.kick;
+        if (parsed.snare) pattern.snare = parsed.snare;
+        if (parsed.hihat) pattern.hihat = parsed.hihat;
+        if (parsed.bpm) { bpm = parsed.bpm; document.getElementById('bpmSlider').value = bpm; }
+        document.getElementById('screen').innerText = `BPM: ${bpm} | GENRE: ${parsed.genre || 'AI'}`;
+      }
+    } catch (e) { console.error("Parse error"); }
+
+    // Init UI
+    createGrid('hihat'); createGrid('snare'); createGrid('kick');
+  </script>
+</body>
+</html>
