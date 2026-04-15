@@ -57,51 +57,62 @@
     let bpm = 120;
     let timerID;
     let audioCtx;
+    let noiseBuffer;
     
     // Order of tracks from top to bottom
     const instruments = ['closed_hat', 'open_hat', 'clap', 'snare', 'tom', 'kick'];
     const trackNames = {'closed_hat': 'Closed Hat', 'open_hat': 'Open Hat', 'clap': 'Clap', 'snare': 'Snare', 'tom': 'Tom', 'kick': 'Kick'};
     
     let pattern = {};
-    instruments.forEach(inst => pattern[inst] = new Array(16).fill(0));
+    let padElements = {};
+    instruments.forEach(inst => {
+      pattern[inst] = new Array(16).fill(0);
+      padElements[inst] = new Array(16);
+    });
 
     // --- AUDIO ENGINE ---
     function initAudio() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        // Pre-generate noise buffer
+        const bufferSize = audioCtx.sampleRate * 2; // 2 seconds of noise
+        noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+      }
       if (audioCtx.state === 'suspended') audioCtx.resume();
     }
 
-    function playKick(time) {
+    function createOsc(time, duration, type = 'sine') {
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
+      osc.type = type;
       osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(time); osc.stop(time + duration);
+      return { osc, gain };
+    }
+
+    function playKick(time) {
+      const { osc, gain } = createOsc(time, 0.5);
       osc.frequency.setValueAtTime(150, time);
       osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.5);
       gain.gain.setValueAtTime(1, time);
       gain.gain.exponentialRampToValueAtTime(0.01, time + 0.5);
-      osc.start(time); osc.stop(time + 0.5);
     }
 
     function playTom(time) {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain); gain.connect(audioCtx.destination);
+      const { osc, gain } = createOsc(time, 0.3);
       osc.frequency.setValueAtTime(200, time); // Higher than kick
       osc.frequency.exponentialRampToValueAtTime(50, time + 0.3);
       gain.gain.setValueAtTime(0.8, time);
       gain.gain.exponentialRampToValueAtTime(0.01, time + 0.3);
-      osc.start(time); osc.stop(time + 0.3);
     }
 
     function playSnare(time) {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'triangle';
-      osc.connect(gain); gain.connect(audioCtx.destination);
+      const { osc, gain } = createOsc(time, 0.2, 'triangle');
       osc.frequency.setValueAtTime(250, time);
       gain.gain.setValueAtTime(0.8, time);
       gain.gain.exponentialRampToValueAtTime(0.01, time + 0.2);
-      osc.start(time); osc.stop(time + 0.2);
       playNoise(time, 0.2, 2000, 'highpass');
     }
 
@@ -122,13 +133,11 @@
 
     // Generic Noise Generator for Hats, Snares, Claps
     function playNoise(time, duration, filterFreq, filterType, vol=0.6) {
-      const bufferSize = audioCtx.sampleRate * duration;
-      const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-      
       const noise = audioCtx.createBufferSource();
-      noise.buffer = buffer;
+      noise.buffer = noiseBuffer;
+      // Start at a random offset to keep it sounding "random"
+      const offset = Math.random() * Math.max(0, noiseBuffer.duration - duration);
+
       const filter = audioCtx.createBiquadFilter();
       filter.type = filterType; filter.frequency.value = filterFreq;
       
@@ -137,7 +146,7 @@
       gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
       
       noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
-      noise.start(time);
+      noise.start(time, offset, duration);
     }
 
     // --- UI BUILDER ---
@@ -164,6 +173,7 @@
           pad.classList.toggle('active');
         };
         grid.appendChild(pad);
+        padElements[inst][i] = pad;
       }
       trackDiv.appendChild(grid);
       container.appendChild(trackDiv);
@@ -172,7 +182,7 @@
     function updateGridVisuals() {
       instruments.forEach(inst => {
         for (let i = 0; i < 16; i++) {
-          const pad = document.getElementById(`pad-${inst}-${i}`);
+          const pad = padElements[inst][i];
           if (pattern[inst][i]) pad.classList.add('active');
           else pad.classList.remove('active');
         }
@@ -189,9 +199,10 @@
       if (pattern.closed_hat[currentStep]) playClosedHat(time);
       if (pattern.open_hat[currentStep]) playOpenHat(time);
       
-      document.querySelectorAll('.pad').forEach(p => p.classList.remove('playing'));
+      const prevStep = (currentStep - 1 + 16) % 16;
       instruments.forEach(inst => {
-        document.getElementById(`pad-${inst}-${currentStep}`).classList.add('playing');
+        padElements[inst][prevStep].classList.remove('playing');
+        padElements[inst][currentStep].classList.add('playing');
       });
 
       currentStep = (currentStep + 1) % 16;
@@ -209,7 +220,10 @@
       if (isPlaying) {
         clearTimeout(timerID);
         btn.innerText = 'Play'; btn.classList.remove('stop');
-        document.querySelectorAll('.pad').forEach(p => p.classList.remove('playing'));
+        const prevStep = (currentStep - 1 + 16) % 16;
+        instruments.forEach(inst => {
+          padElements[inst][prevStep].classList.remove('playing');
+        });
       } else {
         currentStep = 0;
         scheduler();
@@ -227,11 +241,17 @@
     const params = new URLSearchParams(window.location.search);
     try {
       if (params.has('data')) {
-        const parsed = JSON.parse(decodeURIComponent(params.get('data')));
+        const parsed = JSON.parse(params.get('data'));
         instruments.forEach(inst => {
           if (parsed[inst]) pattern[inst] = parsed[inst];
         });
-        if (parsed.bpm) { bpm = parsed.bpm; document.getElementById('bpmSlider').value = bpm; }
+        if (parsed.bpm !== undefined) {
+          let newBpm = parseFloat(parsed.bpm);
+          if (!isNaN(newBpm)) {
+            bpm = Math.max(60, Math.min(180, newBpm));
+            document.getElementById('bpmSlider').value = bpm;
+          }
+        }
         document.getElementById('screen').innerText = `BPM: ${bpm} | GENRE: ${parsed.genre || 'AI'}`;
         updateGridVisuals();
       }

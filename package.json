@@ -4,7 +4,11 @@
   "description": "should make music",
   "main": "index.js",
   "scripts": {
+<<<<<<< Updated upstream
+    "test": "node --test"
+=======
     "test": "jest"
+>>>>>>> Stashed changes
   },
   "repository": {
     "type": "git",
@@ -17,10 +21,14 @@
   "bugs": {
     "url": "https://github.com/ailoaeiclaudiu49-bit/AI-drum-machine-for-gemma/issues"
   },
+<<<<<<< Updated upstream
+  "homepage": "https://github.com/ailoaeiclaudiu49-bit/AI-drum-machine-for-gemma#readme"
+=======
   "homepage": "https://github.com/ailoaeiclaudiu49-bit/AI-drum-machine-for-gemma#readme",
   "devDependencies": {
     "jest": "^30.3.0",
     "jsdom": "^22.1.0",
     "jsdom-global": "^3.0.2"
   }
+>>>>>>> Stashed changes
 }
