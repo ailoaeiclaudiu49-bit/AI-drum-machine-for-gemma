@@ -64,7 +64,11 @@
     const trackNames = {'closed_hat': 'Closed Hat', 'open_hat': 'Open Hat', 'clap': 'Clap', 'snare': 'Snare', 'tom': 'Tom', 'kick': 'Kick'};
     
     let pattern = {};
-    instruments.forEach(inst => pattern[inst] = new Array(16).fill(0));
+    let padElements = {};
+    instruments.forEach(inst => {
+      pattern[inst] = new Array(16).fill(0);
+      padElements[inst] = new Array(16);
+    });
 
     // --- AUDIO ENGINE ---
     function initAudio() {
@@ -169,6 +173,7 @@
           pad.classList.toggle('active');
         };
         grid.appendChild(pad);
+        padElements[inst][i] = pad;
       }
       trackDiv.appendChild(grid);
       container.appendChild(trackDiv);
@@ -177,7 +182,7 @@
     function updateGridVisuals() {
       instruments.forEach(inst => {
         for (let i = 0; i < 16; i++) {
-          const pad = document.getElementById(`pad-${inst}-${i}`);
+          const pad = padElements[inst][i];
           if (pattern[inst][i]) pad.classList.add('active');
           else pad.classList.remove('active');
         }
@@ -194,9 +199,10 @@
       if (pattern.closed_hat[currentStep]) playClosedHat(time);
       if (pattern.open_hat[currentStep]) playOpenHat(time);
       
-      document.querySelectorAll('.pad').forEach(p => p.classList.remove('playing'));
+      const prevStep = (currentStep - 1 + 16) % 16;
       instruments.forEach(inst => {
-        document.getElementById(`pad-${inst}-${currentStep}`).classList.add('playing');
+        padElements[inst][prevStep].classList.remove('playing');
+        padElements[inst][currentStep].classList.add('playing');
       });
 
       currentStep = (currentStep + 1) % 16;
@@ -214,7 +220,10 @@
       if (isPlaying) {
         clearTimeout(timerID);
         btn.innerText = 'Play'; btn.classList.remove('stop');
-        document.querySelectorAll('.pad').forEach(p => p.classList.remove('playing'));
+        const prevStep = (currentStep - 1 + 16) % 16;
+        instruments.forEach(inst => {
+          padElements[inst][prevStep].classList.remove('playing');
+        });
       } else {
         currentStep = 0;
         scheduler();
