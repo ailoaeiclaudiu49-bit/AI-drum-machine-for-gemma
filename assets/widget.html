@@ -229,9 +229,11 @@
       if (params.has('data')) {
         const parsed = JSON.parse(decodeURIComponent(params.get('data')));
         instruments.forEach(inst => {
-          if (parsed[inst]) pattern[inst] = parsed[inst];
+          if (Array.isArray(parsed[inst]) && parsed[inst].length === 16) {
+            pattern[inst] = parsed[inst].map(val => Number(val) || 0);
+          }
         });
-        if (parsed.bpm) { bpm = parsed.bpm; document.getElementById('bpmSlider').value = bpm; }
+        if (parsed.bpm && typeof parsed.bpm === 'number' && parsed.bpm >= 60 && parsed.bpm <= 180) { bpm = parsed.bpm; document.getElementById('bpmSlider').value = bpm; }
         document.getElementById('screen').innerText = `BPM: ${bpm} | GENRE: ${parsed.genre || 'AI'}`;
         updateGridVisuals();
       }
