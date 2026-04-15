@@ -236,7 +236,13 @@
         instruments.forEach(inst => {
           if (parsed[inst]) pattern[inst] = parsed[inst];
         });
-        if (parsed.bpm) { bpm = parsed.bpm; document.getElementById('bpmSlider').value = bpm; }
+        if (parsed.bpm !== undefined) {
+          let newBpm = parseFloat(parsed.bpm);
+          if (!isNaN(newBpm)) {
+            bpm = Math.max(60, Math.min(180, newBpm));
+            document.getElementById('bpmSlider').value = bpm;
+          }
+        }
         document.getElementById('screen').innerText = `BPM: ${bpm} | GENRE: ${parsed.genre || 'AI'}`;
         updateGridVisuals();
       }
