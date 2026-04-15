@@ -57,6 +57,7 @@
     let bpm = 120;
     let timerID;
     let audioCtx;
+    let noiseBuffer;
     
     // Order of tracks from top to bottom
     const instruments = ['closed_hat', 'open_hat', 'clap', 'snare', 'tom', 'kick'];
@@ -67,7 +68,14 @@
 
     // --- AUDIO ENGINE ---
     function initAudio() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        // Pre-generate noise buffer
+        const bufferSize = audioCtx.sampleRate * 2; // 2 seconds of noise
+        noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+      }
       if (audioCtx.state === 'suspended') audioCtx.resume();
     }
 
@@ -122,13 +130,11 @@
 
     // Generic Noise Generator for Hats, Snares, Claps
     function playNoise(time, duration, filterFreq, filterType, vol=0.6) {
-      const bufferSize = audioCtx.sampleRate * duration;
-      const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-      
       const noise = audioCtx.createBufferSource();
-      noise.buffer = buffer;
+      noise.buffer = noiseBuffer;
+      // Start at a random offset to keep it sounding "random"
+      const offset = Math.random() * Math.max(0, noiseBuffer.duration - duration);
+
       const filter = audioCtx.createBiquadFilter();
       filter.type = filterType; filter.frequency.value = filterFreq;
       
@@ -137,7 +143,7 @@
       gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
       
       noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
-      noise.start(time);
+      noise.start(time, offset, duration);
     }
 
     // --- UI BUILDER ---
