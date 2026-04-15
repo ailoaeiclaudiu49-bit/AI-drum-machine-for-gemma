@@ -1,0 +1,15 @@
+window['ai_edge_gallery_get_result'] = async (data) => {
+  try {
+    let cleanData = data || "{}";
+    if (cleanData.startsWith("```json")) {
+      cleanData = cleanData.replace(/```json/g, '').replace(/```/g, '').trim();
+    }
+    const encodedData = encodeURIComponent(cleanData);
+    return JSON.stringify({
+      result: "Beat loaded! Press play to listen.",
+      webview: { url: `../assets/widget.html?data=${encodedData}` }
+    });
+  } catch (e) {
+    return JSON.stringify({error: "Bridge failed."});
+  }
+};
