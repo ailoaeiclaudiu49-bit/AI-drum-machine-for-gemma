@@ -79,37 +79,36 @@
       if (audioCtx.state === 'suspended') audioCtx.resume();
     }
 
-    function playKick(time) {
+    function createOsc(time, duration, type = 'sine') {
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
+      osc.type = type;
       osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.start(time); osc.stop(time + duration);
+      return { osc, gain };
+    }
+
+    function playKick(time) {
+      const { osc, gain } = createOsc(time, 0.5);
       osc.frequency.setValueAtTime(150, time);
       osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.5);
       gain.gain.setValueAtTime(1, time);
       gain.gain.exponentialRampToValueAtTime(0.01, time + 0.5);
-      osc.start(time); osc.stop(time + 0.5);
     }
 
     function playTom(time) {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain); gain.connect(audioCtx.destination);
+      const { osc, gain } = createOsc(time, 0.3);
       osc.frequency.setValueAtTime(200, time); // Higher than kick
       osc.frequency.exponentialRampToValueAtTime(50, time + 0.3);
       gain.gain.setValueAtTime(0.8, time);
       gain.gain.exponentialRampToValueAtTime(0.01, time + 0.3);
-      osc.start(time); osc.stop(time + 0.3);
     }
 
     function playSnare(time) {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'triangle';
-      osc.connect(gain); gain.connect(audioCtx.destination);
+      const { osc, gain } = createOsc(time, 0.2, 'triangle');
       osc.frequency.setValueAtTime(250, time);
       gain.gain.setValueAtTime(0.8, time);
       gain.gain.exponentialRampToValueAtTime(0.01, time + 0.2);
-      osc.start(time); osc.stop(time + 0.2);
       playNoise(time, 0.2, 2000, 'highpass');
     }
 
