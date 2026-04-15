@@ -1,0 +1,4 @@
+Benchmark Results for assets/widget.html:
+Iterations: 5000
+Total Time: 51.00 ms
+Average Time per nextNote: 0.0102 ms
