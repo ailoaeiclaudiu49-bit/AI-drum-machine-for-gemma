@@ -227,7 +227,7 @@
     const params = new URLSearchParams(window.location.search);
     try {
       if (params.has('data')) {
-        const parsed = JSON.parse(decodeURIComponent(params.get('data')));
+        const parsed = JSON.parse(params.get('data'));
         instruments.forEach(inst => {
           if (parsed[inst]) pattern[inst] = parsed[inst];
         });
